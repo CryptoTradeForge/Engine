@@ -2,7 +2,6 @@ import os
 import dotenv
 from datetime import datetime, timedelta, timezone
 import logging
-from smartmoneyconcepts import smc
 from tqdm import tqdm
 import pandas as pd
 from dotenv import load_dotenv
