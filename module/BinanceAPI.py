@@ -17,7 +17,7 @@ class BinanceAPI(ExchangeAPI):
         """
         Places a market order with optional Stop-Loss and Take-Profit.
         Remember to remove SL/TP orders if the position is closed with 'cancel_open_orders'.
-        
+
         :param symbol: Trading pair, e.g. "BTCUSDT"
         :param side: "BUY" or "SELL"
         :param quantity: Order quantity
@@ -26,12 +26,20 @@ class BinanceAPI(ExchangeAPI):
         :return: Order information returned by Binance
         """
         try:
+            # Get precision for this symbol
+            price_precision = self.get_price_precision(symbol)
+            qty_precision = self.get_quantity_precision(symbol)
+
+            # Format quantity
+            from . import utils
+            formatted_qty = utils.truncate_to_precision(quantity, qty_precision)
+
             # Open market order
             order = self.client.futures_create_order(
                 symbol=symbol,
                 side=side,
                 type="MARKET",
-                quantity=quantity
+                quantity=formatted_qty
             )
 
             # Determine opposite direction for stop orders
@@ -39,22 +47,24 @@ class BinanceAPI(ExchangeAPI):
 
             # Place Stop-Loss Order (STOP_MARKET)
             if stop_loss:
+                formatted_sl = utils.truncate_to_precision(stop_loss, price_precision)
                 sl_order = self.client.futures_create_order(
                     symbol=symbol,
                     side=stop_side,
                     type="STOP_MARKET",
-                    stopPrice=stop_loss,
-                    quantity=quantity
+                    stopPrice=formatted_sl,
+                    quantity=formatted_qty
                 )
 
             # Place Take-Profit Order (TAKE_PROFIT_MARKET)
             if take_profit:
+                formatted_tp = utils.truncate_to_precision(take_profit, price_precision)
                 tp_order = self.client.futures_create_order(
                     symbol=symbol,
                     side=stop_side,
                     type="TAKE_PROFIT_MARKET",
-                    stopPrice=take_profit,
-                    quantity=quantity
+                    stopPrice=formatted_tp,
+                    quantity=formatted_qty
                 )
 
         except Exception as e:
