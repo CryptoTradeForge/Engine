@@ -23,7 +23,7 @@ class BinanceAPI(ExchangeAPI):
         :param quantity: Order quantity
         :param stop_loss: Stop-loss price (optional)
         :param take_profit: Take-profit price (optional)
-        :return: Order information returned by Binance
+        :return: Dictionary with order IDs: {"market_order_id": int, "sl_order_id": int|None, "tp_order_id": int|None}
         """
         try:
             # Get precision for this symbol
@@ -42,6 +42,12 @@ class BinanceAPI(ExchangeAPI):
                 quantity=formatted_qty
             )
 
+            result = {
+                "market_order_id": order["orderId"],
+                "sl_order_id": None,
+                "tp_order_id": None
+            }
+
             # Determine opposite direction for stop orders
             stop_side = "SELL" if side == "BUY" else "BUY"
 
@@ -55,6 +61,7 @@ class BinanceAPI(ExchangeAPI):
                     stopPrice=formatted_sl,
                     quantity=formatted_qty
                 )
+                result["sl_order_id"] = sl_order["orderId"]
 
             # Place Take-Profit Order (TAKE_PROFIT_MARKET)
             if take_profit:
@@ -66,9 +73,13 @@ class BinanceAPI(ExchangeAPI):
                     stopPrice=formatted_tp,
                     quantity=formatted_qty
                 )
+                result["tp_order_id"] = tp_order["orderId"]
+
+            return result
 
         except Exception as e:
             print(f"❌ Binance API Error: Error opening orders for {symbol} {e}")
+            return None
 
     def cancel_open_orders(self, symbol: str):
         """
@@ -85,6 +96,20 @@ class BinanceAPI(ExchangeAPI):
 
         except Exception as e:
             print(f"❌ Binance API Error: Error canceling orders for {symbol} {e}")
+
+    def cancel_order(self, symbol: str, order_id: int):
+        """
+        Cancels a specific order by order ID.
+
+        :param symbol: Trading pair, e.g. "BTCUSDT"
+        :param order_id: The order ID to cancel
+        """
+        try:
+            self.client.futures_cancel_order(symbol=symbol, orderId=order_id)
+            print(f"✅ Canceled Order ID: {order_id} for {symbol}")
+
+        except Exception as e:
+            print(f"❌ Binance API Error: Error canceling order {order_id} for {symbol}: {e}")
 
     def get_position(self, symbol: str) -> dict:
         """

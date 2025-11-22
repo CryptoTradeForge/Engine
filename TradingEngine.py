@@ -1,4 +1,5 @@
 import os
+import sys
 import dotenv
 from datetime import datetime, timedelta, timezone
 import logging
@@ -6,6 +7,9 @@ from tqdm import tqdm
 import pandas as pd
 from dotenv import load_dotenv
 from binance.client import Client
+
+# Add parent directory to path for module imports
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 import module.utils as utils
 from module.BinanceAPI import BinanceAPI
@@ -45,6 +49,8 @@ class TradingEngine:
         self.entry_time = None
         self.stop_loss = None
         self.take_profit = None
+        self.sl_order_id = None
+        self.tp_order_id = None
 
         self.api = api if api is not None else BinanceAPI()
         self.price_precision = self.api.get_price_precision(self.symbol)
@@ -125,10 +131,10 @@ class TradingEngine:
     def __reset_position_state(self) -> None:
         """
         Reset the position state to initial.
-        
+
         :return: None
         """
-        attributes = ['open_price', 'entry_time', 'stop_loss', 'take_profit']
+        attributes = ['open_price', 'entry_time', 'stop_loss', 'take_profit', 'sl_order_id', 'tp_order_id']
         for attr in attributes:
             setattr(self, attr, None)
         self.position = 0
@@ -160,7 +166,19 @@ class TradingEngine:
 
         utc8 = utils.timestamp_to_utc(timestamp, 8)
         self.logger.info(f"📈 Opened {position_type} position: {self.position} at {price} on {utc8}")
-        self.api.place_market_order(self.symbol, "BUY" if position_type == "long" else "SELL", abs(self.position), stop_loss=stop_loss, take_profit=take_profit)
+
+        # Place market order and store order IDs
+        order_result = self.api.place_market_order(
+            self.symbol,
+            "BUY" if position_type == "long" else "SELL",
+            abs(self.position),
+            stop_loss=stop_loss,
+            take_profit=take_profit
+        )
+
+        if order_result:
+            self.sl_order_id = order_result.get("sl_order_id")
+            self.tp_order_id = order_result.get("tp_order_id")
 
     def __close_position(self, position_type: str, timestamp: any, price: float) -> None:
         """
@@ -185,7 +203,13 @@ class TradingEngine:
         utc8 = utils.timestamp_to_utc(timestamp, 8)
         self.logger.info(f"📉 Closed {position_type} position: {self.position} at {price} on {utc8}, Profit: {profit}")
         self.api.place_market_order(self.symbol, "SELL" if position_type == "long" else "BUY", abs(self.position))
-        self.api.cancel_open_orders(self.symbol)
+
+        # Cancel only our tracked stop loss and take profit orders
+        if self.sl_order_id:
+            self.api.cancel_order(self.symbol, self.sl_order_id)
+        if self.tp_order_id:
+            self.api.cancel_order(self.symbol, self.tp_order_id)
+
         self.__reset_position_state()  
 
     def __setup_logger(self, symbol: str) -> logging.Logger:
