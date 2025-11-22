@@ -179,6 +179,9 @@ class TradingEngine:
         if order_result:
             self.sl_order_id = order_result.get("sl_order_id")
             self.tp_order_id = order_result.get("tp_order_id")
+        else:
+            self.logger.error(f"Failed to place market order for {self.symbol}, order_result is None")
+            raise RuntimeError(f"Failed to place market order for {self.symbol}")
 
     def __close_position(self, position_type: str, timestamp: any, price: float) -> None:
         """
